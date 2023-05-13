@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,8 +26,8 @@ namespace NaughtyAttributes.Editor
 		
 		private Dictionary<string, SavedBool> _foldouts = new Dictionary<string, SavedBool>();
 
-        private delegate void EBDrawMethodDel(IEnumerable<object> targets);
-        private EBDrawMethodDel _ebEbDrawMethod;
+		private delegate void EBDrawMethodDel(IEnumerable<object> targets);
+		private EBDrawMethodDel _ebEbDrawMethod;
 
 		private bool _anyNaughtyAttribute;
 		
@@ -54,9 +54,10 @@ namespace NaughtyAttributes.Editor
 			_nonGroupedSerializedProperty.Clear();
 			_serializedProperties.Clear();
 			
+			_ebEbDrawMethod = null;
+
 			m_ScriptProperty = default;
-            _ebEbDrawMethod = null;
-        }
+		}
 
 		public virtual void Prepare()
 		{
@@ -85,53 +86,35 @@ namespace NaughtyAttributes.Editor
 
 			_useCachedMetaAttributes = false;
 
-            EasyButtonSupport();
+			if (!EasyButtonSupport())
+			{
+				Debug.LogWarning("EasyButtons drawer definition does not match");
+			}
 		}
 
-        private void EasyButtonSupport()
-        {
-            var ebDrawerType = Type.GetType("EasyButtons.Editor.ButtonsDrawer, EasyButtons.Editor");
+		private bool EasyButtonSupport()
+		{
+			var ebDrawerType = Type.GetType("EasyButtons.Editor.ButtonsDrawer, EasyButtons.Editor");
+			if (ebDrawerType == null) return true;
 
-            if (ebDrawerType == null) return;
+			var constructor = ebDrawerType.GetConstructor(new[] { typeof(object) });
+			var ebDrawer = constructor?.Invoke(new[] { target });
+			if (ebDrawer == null) return false;
 
-            var constructor = ebDrawerType.GetConstructor(new[] { typeof(object) });
-            if (constructor == null)
-            {
-                Debug.LogWarning("NaughtyAttributes: EasyButtons.ButtonAttribute constructor not found");
-                return;
-            }
+			var buttonsListField = ebDrawerType.GetField("Buttons", BindingFlags.Instance | BindingFlags.Public);
+			if (buttonsListField == null) return false;
 
-            var ebDrawer = constructor.Invoke(new[] { target });
-            if (ebDrawer == null)
-            {
-                Debug.LogWarning("NaughtyAttributes: EasyButtons.ButtonAttribute constructor failed");
-                return;
-            }
+			var buttonsList = buttonsListField.GetValue(ebDrawer) as IList;
 
-            var buttonsListField = ebDrawerType.GetField("Buttons", BindingFlags.Instance | BindingFlags.Public);
-            if (buttonsListField == null)
-            {
-                Debug.LogWarning("NaughtyAttributes: EasyButtons.Editor.ButtonsDrawer.Buttons field not found");
-                return;
-            }
+			if (buttonsList == null || buttonsList.Count == 0) return true;
 
-            var buttonsList = buttonsListField.GetValue(ebDrawer) as IList;
+			var drawMethodInfo = ebDrawerType.GetMethod("DrawButtons", new[] { typeof(IEnumerable<object>) });
+			if (drawMethodInfo == null) return false;
 
-            if (buttonsList == null || buttonsList.Count == 0)
-            {
-                return;
-            }
-
-            var drawMethodInfo = ebDrawerType.GetMethod("DrawButtons", new[] { typeof(IEnumerable<object>) });
-            if (drawMethodInfo == null)
-            {
-                Debug.LogWarning("NaughtyAttributes: EasyButtons.Editor.ButtonsDrawer.DrawButtons method not found");
-                return;
-            }
-
-            _ebEbDrawMethod = drawMethodInfo.CreateDelegate(typeof(EBDrawMethodDel), ebDrawer) as EBDrawMethodDel;
-        }
-        
+			_ebEbDrawMethod = drawMethodInfo.CreateDelegate(typeof(EBDrawMethodDel), ebDrawer) as EBDrawMethodDel;
+			return true;
+		}
+		
 		public override void OnInspectorGUI()
 		{
 			_changeDetected = false;
@@ -327,9 +310,9 @@ namespace NaughtyAttributes.Editor
 				foreach (var method in _methods)
 				{
 					NaughtyEditorGUI.Button(serializedObject.targetObject, method);
-                }
+				}
 
-                _ebEbDrawMethod?.Invoke(targets);
+				_ebEbDrawMethod?.Invoke(targets);
 			}
 		}
 
